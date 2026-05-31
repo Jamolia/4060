@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CD4060 – Bauteile an Pin 9, 10, 11</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 14px; background: #f5f5f2; color: #1a1a18; padding: 24px 16px; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 20px; }
+  .bauteil-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .bauteil-card { border: 1px solid #ddd; border-radius: 12px; padding: 12px 14px; background: #efefeb; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .bauteil-card:hover { background: #e8e8e4; }
+  .bauteil-card.sel { border-width: 2px; background: #fff; }
+  .bauteil-card.rt.sel  { border-color: #185FA5; }
+  .bauteil-card.ct.sel  { border-color: #0F6E56; }
+  .bauteil-card.rs.sel  { border-color: #854F0B; }
+  .bauteil-pin  { font-size: 11px; color: #888; margin-bottom: 2px; }
+  .bauteil-name { font-size: 16px; font-weight: 500; margin-bottom: 3px; }
+  .bauteil-name.rt { color: #185FA5; }
+  .bauteil-name.ct { color: #0F6E56; }
+  .bauteil-name.rs { color: #854F0B; }
+  .bauteil-sub  { font-size: 12px; color: #666; line-height: 1.5; }
+  .detail-box { border: 1px solid #ddd; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; background: #fff; min-height: 110px; }
+  .detail-title { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+  .detail-body  { font-size: 13px; color: #444; line-height: 1.7; }
+  .analogy-box  { border-left: 3px solid #ccc; padding: 8px 12px; margin-top: 10px; border-radius: 0 8px 8px 0; background: #f5f5f2; font-size: 13px; color: #555; font-style: italic; }
+  .section-title { font-size: 14px; font-weight: 500; color: #444; margin-bottom: 10px; }
+  .ctrl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .ctrl-row label { font-size: 13px; min-width: 28px; color: #666; }
+  .ctrl-row input[type=range] { flex: 1; accent-color: #378ADD; }
+  .ctrl-row .val { font-size: 13px; font-weight: 500; min-width: 72px; color: #1a1a18; }
+  .result-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .res-card { flex: 1; min-width: 80px; background: #efefeb; border-radius: 8px; padding: 8px 12px; }
+  .res-lbl { font-size: 11px; color: #888; }
+  .res-val { font-size: 18px; font-weight: 500; color: #1a1a18; }
+  .warn-box { font-size: 12px; border-radius: 8px; padding: 7px 10px; margin-top: 8px; background: #fff8e1; color: #7a4f00; border: 1px solid #f0c060; display: none; }
+  canvas { width: 100%; display: block; border-radius: 8px; margin-top: 12px; background: #fff; border: 1px solid #e0e0dc; }
+  .divider { border: none; border-top: 1px solid #e0e0dc; margin: 20px 0; }
+  .osc-section { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 14px 16px; margin-top: 14px; }
+  .osc-state { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .osc-card { background: #f5f5f2; border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 90px; }
+  .osc-card-label { font-size: 11px; color: #888; }
+  .osc-card-val { font-size: 18px; font-weight: 500; }
+  .phase-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .phase-pill { font-size: 12px; padding: 4px 10px; border-radius: 20px; border: 1px solid #ddd; color: #888; background: #f5f5f2; transition: background 0.15s, color 0.15s; }
+  .phase-pill.on { background: #d4f0e4; color: #0F6E56; border-color: #5DCAA5; font-weight: 500; }
+  .osc-controls { display: flex; gap: 14px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .osc-ctrl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #666; }
+  .osc-ctrl input[type=range] { width: 100px; accent-color: #378ADD; }
+  .pause-btn { font-size: 13px; padding: 5px 14px; cursor: pointer; border-radius: 8px; border: 1px solid #ccc; background: #f5f5f2; color: #333; }
+  .pause-btn:hover { background: #e8e8e4; }
+  .pause-btn.paused { background: #e8f0ff; color: #185FA5; border-color: #185FA5; }
+  .footer { margin-top: 24px; font-size: 12px; color: #aaa; text-align: center; }
+  @media (max-width: 500px) { .bauteil-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>CD4060 – Bauteile an Pin 9, 10 und 11</h1>
+<p class="subtitle">Interaktive Erklärung · funktioniert vollständig offline</p>
+
+<div class="bauteil-grid">
+  <div class="bauteil-card rt sel" onclick="select('rt')">
+    <div class="bauteil-pin">Pin 10</div>
+    <div class="bauteil-name rt">RT</div>
+    <div class="bauteil-sub">Lade-Widerstand<br>bestimmt Frequenz</div>
+  </div>
+  <div class="bauteil-card ct" onclick="select('ct')">
+    <div class="bauteil-pin">Pin 9</div>
+    <div class="bauteil-name ct">CT</div>
+    <div class="bauteil-sub">Timing-Kondensator<br>speichert Ladung</div>
+  </div>
+  <div class="bauteil-card rs" onclick="select('rs')">
+    <div class="bauteil-pin">Pin 11</div>
+    <div class="bauteil-name rs">RS</div>
+    <div class="bauteil-sub">Serien-Widerstand<br>stabilisiert Rückkopplung</div>
+  </div>
+</div>
+
+<div class="detail-box" id="detail-box"></div>
+
+<div class="section-title">Werte anpassen → Frequenz wird live berechnet</div>
+<div class="ctrl-row">
+  <label>RT</label>
+  <input type="range" min="1" max="100" step="1" value="100" id="rt-sl">
+  <span class="val" id="rt-lbl">100 kΩ</span>
+</div>
+<div class="ctrl-row">
+  <label>CT</label>
+  <input type="range" min="1" max="100" step="1" value="100" id="ct-sl">
+  <span class="val" id="ct-lbl">100 nF</span>
+</div>
+<div class="ctrl-row">
+  <label>RS</label>
+  <input type="range" min="1" max="50" step="1" value="10" id="rs-sl">
+  <span class="val" id="rs-lbl">10 kΩ</span>
+</div>
+<div class="warn-box" id="rs-warn">⚠ RS ist zu groß (&gt; RT/5) – der Oszillator könnte instabil schwingen oder ausfallen.</div>
+<div class="result-row">
+  <div class="res-card"><div class="res-lbl">Frequenz (Oszillator)</div><div class="res-val" id="freq-val">—</div></div>
+  <div class="res-card"><div class="res-lbl">Periode</div><div class="res-val" id="period-val">—</div></div>
+  <div class="res-card"><div class="res-lbl">RS-Verhältnis</div><div class="res-val" id="rs-ratio">—</div></div>
+</div>
+<canvas id="sim-canvas" height="110"></canvas>
+
+<hr class="divider">
+
+<div class="section-title">Relaxationsoszillator – Live-Animation</div>
+<div class="osc-section">
+  <div class="osc-state">
+    <div class="osc-card"><div class="osc-card-label">Kondensatorspannung</div><div class="osc-card-val" id="vc-val" style="color:#185FA5">0.00 V</div></div>
+    <div class="osc-card"><div class="osc-card-label">Ausgang (Pin 10)</div><div class="osc-card-val" id="out-val" style="color:#1D9E75">HIGH</div></div>
+    <div class="osc-card"><div class="osc-card-label">Phase</div><div class="osc-card-val" id="phase-val" style="font-size:15px">Laden</div></div>
+  </div>
+  <div class="phase-row">
+    <span class="phase-pill" id="p-charge">Kondensator lädt sich auf</span>
+    <span class="phase-pill" id="p-trip-h">Kippt → LOW (V+ erreicht)</span>
+    <span class="phase-pill" id="p-discharge">Kondensator entlädt sich</span>
+    <span class="phase-pill" id="p-trip-l">Kippt → HIGH (V− erreicht)</span>
+  </div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">Kondensatorspannung (UC)</div>
+      <canvas id="cv-canvas" height="130"></canvas>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">Ausgangsrechteck</div>
+      <canvas id="out-canvas" height="130"></canvas>
+    </div>
+  </div>
+  <div class="osc-controls">
+    <div class="osc-ctrl">
+      <span>Geschwindigkeit</span>
+      <input type="range" min="1" max="5" step="1" value="2" id="speed-sl">
+      <span id="speed-lbl" style="min-width:20px;font-weight:500">2×</span>
+    </div>
+    <button class="pause-btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
+  </div>
+</div>
+
+<p class="footer">CD4060 Simulation · Standalone HTML · keine Internetverbindung erforderlich</p>
+
+<script>
+const details = {
+  rt: {
+    title: 'RT — der Lade-Widerstand (Pin 10)',
+    color: '#185FA5',
+    body: 'RT steuert, wie schnell der Strom in den Kondensator CT hineinfließt — und wie schnell er wieder herausfließt. Je größer RT, desto langsamer fließt der Strom, desto länger braucht CT um sich auf- oder zu entladen, desto niedriger die Frequenz.<br><br>RT steht direkt in der Frequenzformel: <strong>f ≈ 1 / (2,3 × RT × CT)</strong>. Verdoppelst du RT, halbiert sich die Frequenz — eine direkte, lineare Beziehung.',
+    analogy: 'Stell dir RT wie einen engen Wasserhahn vor: klein aufgedreht = wenig Wasser = Eimer füllt sich langsam = langer Takt.'
+  },
+  ct: {
+    title: 'CT — der Timing-Kondensator (Pin 9)',
+    color: '#0F6E56',
+    body: 'CT ist das "Gedächtnis" des Oszillators. Er speichert elektrische Ladung — und genau seine Spannung beobachtet der interne Schmitt-Trigger. Steigt die Spannung an CT auf V+ (≈ 2/3 VDD), kippt der Ausgang. Fällt sie auf V− (≈ 1/3 VDD), kippt er zurück.<br><br>CT bestimmt zusammen mit RT die Frequenz: <strong>f ≈ 1 / (2,3 × RT × CT)</strong>. Ein größerer Kondensator nimmt mehr Ladung auf — er braucht länger, also sinkt die Frequenz.',
+    analogy: 'CT ist der Eimer: groß = braucht lange bis er voll ist. Klein = schnell voll, schnell leer = hohe Frequenz.'
+  },
+  rs: {
+    title: 'RS — der Serien-Widerstand (Pin 11)',
+    color: '#854F0B',
+    body: 'RS sitzt zwischen dem Ausgangspin des internen Inverters und dem RT/CT-Netzwerk. Er verhindert, dass der Ausgang direkt und abrupt auf den Kondensator CT "schlägt" wenn der Schmitt-Trigger kippt.<br><br>Ohne RS würde beim Umschalten ein sehr hoher Rückkopplungsstrom fließen — der Chip schwingt instabil oder gar nicht. Mit RS wird dieser Impuls gedämpft.<br><br>Faustformel: <strong>RS ≈ RT / 10</strong>. Zu groß gewählt stört RS seinerseits die Frequenz.',
+    analogy: 'RS ist wie ein Stoßdämpfer: ohne ihn "knallt" der Rückkopplungsimpuls unkontrolliert auf den Kondensator.'
+  }
+};
+
+function select(id) {
+  document.querySelectorAll('.bauteil-card').forEach(c => c.classList.remove('sel'));
+  document.querySelector('.bauteil-card.' + id).classList.add('sel');
+  const d = details[id];
+  document.getElementById('detail-box').innerHTML =
+    '<div class="detail-title" style="color:' + d.color + '">' + d.title + '</div>' +
+    '<div class="detail-body">' + d.body + '</div>' +
+    '<div class="analogy-box">' + d.analogy + '</div>';
+}
+select('rt');
+
+function fmtFreq(f) {
+  if (f >= 1000) return (f / 1000).toFixed(2) + ' kHz';
+  if (f >= 1)    return f.toFixed(2) + ' Hz';
+  return (f * 1000).toFixed(1) + ' mHz';
+}
+function fmtPeriod(f) {
+  const p = 1 / f;
+  if (p < 0.001) return (p * 1000000).toFixed(0) + ' µs';
+  if (p < 1)     return (p * 1000).toFixed(1) + ' ms';
+  return p.toFixed(2) + ' s';
+}
+
+const simCvs = document.getElementById('sim-canvas');
+let simW = simCvs.offsetWidth || 600;
+simCvs.width  = simW * devicePixelRatio;
+simCvs.height = 110 * devicePixelRatio;
+simCvs.style.width  = simW + 'px';
+simCvs.style.height = '110px';
+const simCtx = simCvs.getContext('2d');
+simCtx.scale(devicePixelRatio, devicePixelRatio);
+
+function drawWave(freq) {
+  const W = simW, H = 110;
+  simCtx.clearRect(0, 0, W, H);
+  const PAD = 16, PH = H - PAD * 2;
+  simCtx.strokeStyle = 'rgba(0,0,0,0.07)'; simCtx.lineWidth = 0.5;
+  simCtx.beginPath(); simCtx.moveTo(0, PAD + PH/2); simCtx.lineTo(W, PAD + PH/2); simCtx.stroke();
+  const cycles = Math.min(Math.max(freq * 0.5, 2), 8);
+  const pxPerCycle = W / cycles;
+  simCtx.strokeStyle = '#1D9E75'; simCtx.lineWidth = 2;
+  simCtx.beginPath();
+  let x = 0;
+  for (let c = 0; c < cycles; c++) {
+    const hx = pxPerCycle / 2;
+    if (c === 0) simCtx.moveTo(x, PAD + 6); else simCtx.lineTo(x, PAD + 6);
+    simCtx.lineTo(x + hx, PAD + 6);
+    simCtx.lineTo(x + hx, PAD + PH - 6);
+    simCtx.lineTo(x + pxPerCycle, PAD + PH - 6);
+    x += pxPerCycle;
+  }
+  simCtx.stroke();
+  simCtx.fillStyle = 'rgba(0,0,0,0.35)'; simCtx.font = '11px sans-serif'; simCtx.textAlign = 'center';
+  simCtx.fillText('Ausgangsrechteck (symbolisch) — ' + fmtFreq(freq), W/2, H - 3);
+}
+
+function update() {
+  const rt = +document.getElementById('rt-sl').value * 1000;
+  const ct = +document.getElementById('ct-sl').value * 1e-9;
+  const rs = +document.getElementById('rs-sl').value * 1000;
+  document.getElementById('rt-lbl').textContent = (rt/1000).toFixed(0) + ' kΩ';
+  document.getElementById('ct-lbl').textContent = (+document.getElementById('ct-sl').value).toFixed(0) + ' nF';
+  document.getElementById('rs-lbl').textContent = (rs/1000).toFixed(0) + ' kΩ';
+  const f = 1 / (2.3 * rt * ct);
+  document.getElementById('freq-val').textContent   = fmtFreq(f);
+  document.getElementById('period-val').textContent = fmtPeriod(f);
+  const ratio = rs / rt;
+  document.getElementById('rs-ratio').textContent = 'RS = RT × ' + ratio.toFixed(2);
+  document.getElementById('rs-warn').style.display = ratio > 0.2 ? 'block' : 'none';
+  drawWave(f);
+}
+['rt-sl','ct-sl','rs-sl'].forEach(id => document.getElementById(id).addEventListener('input', update));
+update();
+
+(function() {
+  const VDD = 5.0, V_HIGH = 3.0, V_LOW = 2.0, TAU = 180;
+  let t = 0, vc = V_LOW + 0.01, charging = true, out = true, running = true, speed = 2;
+
+  const cvCanvas  = document.getElementById('cv-canvas');
+  const outCanvas = document.getElementById('out-canvas');
+  function initCanvas(c) {
+    const W = c.offsetWidth || 280;
+    c.width  = W * devicePixelRatio; c.height = 130 * devicePixelRatio;
+    c.style.width = W + 'px'; c.style.height = '130px';
+    c.getContext('2d').scale(devicePixelRatio, devicePixelRatio);
+    return W;
+  }
+  let CW = initCanvas(cvCanvas); initCanvas(outCanvas);
+  const ctxC = cvCanvas.getContext('2d');
+  const ctxO = outCanvas.getContext('2d');
+
+  const HIST = CW;
+  const vcHist  = new Float32Array(HIST).fill(vc);
+  const outHist = new Uint8Array(HIST).fill(1);
+  let idx = 0;
+
+  function drawCv() {
+    const W = CW, H = 130, PAD = 28, PH = H - PAD - 10;
+    function vy(v) { return PAD + PH - (v/VDD)*PH; }
+    ctxC.clearRect(0,0,W,H);
+    ctxC.strokeStyle='rgba(0,0,0,0.07)'; ctxC.lineWidth=0.5;
+    for(let g=0;g<=5;g++){const y=vy(g);ctxC.beginPath();ctxC.moveTo(0,y);ctxC.lineTo(W,y);ctxC.stroke();}
+    ctxC.strokeStyle='#E24B4A'; ctxC.lineWidth=1; ctxC.setLineDash([4,3]);
+    ctxC.beginPath();ctxC.moveTo(0,vy(V_HIGH));ctxC.lineTo(W,vy(V_HIGH));ctxC.stroke();
+    ctxC.strokeStyle='#EF9F27';
+    ctxC.beginPath();ctxC.moveTo(0,vy(V_LOW));ctxC.lineTo(W,vy(V_LOW));ctxC.stroke();
+    ctxC.setLineDash([]);
+    ctxC.font='10px sans-serif'; ctxC.textAlign='left';
+    ctxC.fillStyle='#E24B4A'; ctxC.fillText('V+ ('+V_HIGH+'V)',3,vy(V_HIGH)-3);
+    ctxC.fillStyle='#EF9F27'; ctxC.fillText('V− ('+V_LOW+'V)',3,vy(V_LOW)+11);
+    ctxC.strokeStyle='#378ADD'; ctxC.lineWidth=2; ctxC.setLineDash([]);
+    ctxC.beginPath();
+    for(let i=0;i<HIST;i++){const si=(idx+i)%HIST;const y=vy(vcHist[si]);if(i===0)ctxC.moveTo(i,y);else ctxC.lineTo(i,y);}
+    ctxC.stroke();
+    ctxC.fillStyle='rgba(0,0,0,0.35)'; ctxC.textAlign='right';
+    for(let g=0;g<=5;g++) ctxC.fillText(g+'V',W-2,vy(g)+4);
+  }
+
+  function drawOut() {
+    const W = CW, H = 130, PAD = 28, PH = H-PAD-10;
+    const yH=PAD+6, yL=PAD+PH-6;
+    ctxO.clearRect(0,0,W,H);
+    ctxO.strokeStyle='rgba(0,0,0,0.07)'; ctxO.lineWidth=0.5;
+    ctxO.beginPath();ctxO.moveTo(0,yH);ctxO.lineTo(W,yH);ctxO.stroke();
+    ctxO.beginPath();ctxO.moveTo(0,yL);ctxO.lineTo(W,yL);ctxO.stroke();
+    ctxO.fillStyle='rgba(0,0,0,0.35)'; ctxO.font='10px sans-serif'; ctxO.textAlign='right';
+    ctxO.fillText('HIGH',W-2,yH+4); ctxO.fillText('LOW',W-2,yL+4);
+    ctxO.strokeStyle='#1D9E75'; ctxO.lineWidth=2; ctxO.setLineDash([]);
+    ctxO.beginPath();
+    let prevY=outHist[idx%HIST]?yH:yL; ctxO.moveTo(0,prevY);
+    for(let i=1;i<HIST;i++){
+      const si=(idx+i)%HIST; const ny=outHist[si]?yH:yL;
+      if(ny!==prevY){ctxO.lineTo(i,prevY);ctxO.lineTo(i,ny);}
+      prevY=ny;
+    }
+    ctxO.lineTo(HIST-1,prevY); ctxO.stroke();
+  }
+
+  function setPills(phase){
+    ['p-charge','p-trip-h','p-discharge','p-trip-l'].forEach(id=>document.getElementById(id).classList.remove('on'));
+    document.getElementById(phase).classList.add('on');
+  }
+
+  document.getElementById('speed-sl').oninput = function(){
+    speed = +this.value;
+    document.getElementById('speed-lbl').textContent = speed+'×';
+  };
+
+  window.togglePause = function(){
+    running = !running;
+    const btn = document.getElementById('pause-btn');
+    btn.textContent = running ? '⏸ Pause' : '▶ Weiter';
+    btn.classList.toggle('paused', !running);
+  };
+
+  let lastTs = null;
+  function frame(ts){
+    if(lastTs===null) lastTs=ts;
+    let dt = (ts-lastTs)*speed*0.04; lastTs=ts;
+    if(dt>12) dt=12;
+    if(running){
+      if(charging){
+        vc += (VDD-vc)/TAU*dt;
+        if(vc>=V_HIGH){vc=V_HIGH;out=false;charging=false;
+          document.getElementById('out-val').textContent='LOW';
+          document.getElementById('out-val').style.color='#A32D2D';
+          setPills('p-trip-h');
+        } else { setPills('p-charge'); }
+      } else {
+        vc -= vc/TAU*dt;
+        if(vc<=V_LOW){vc=V_LOW;out=true;charging=true;
+          document.getElementById('out-val').textContent='HIGH';
+          document.getElementById('out-val').style.color='#1D9E75';
+          setPills('p-trip-l');
+        } else { setPills('p-discharge'); }
+      }
+      document.getElementById('vc-val').textContent = vc.toFixed(2)+' V';
+      document.getElementById('phase-val').textContent = charging?'Laden':'Entladen';
+      vcHist[idx]=vc; outHist[idx]=out?1:0; idx=(idx+1)%HIST;
+    }
+    drawCv(); drawOut();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

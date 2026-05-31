@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CD4060 – Live Pinsignal-Simulation</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:13px;background:#f2f1ee;color:#1a1a18;padding:16px}
+h1{font-size:18px;font-weight:500;margin-bottom:2px}
+.sub{font-size:12px;color:#888;margin-bottom:16px}
+/* ===== CHIP VIEW ===== */
+.chip-outer{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;margin-bottom:12px}
+.chip-layout{display:flex;align-items:stretch;gap:0;width:100%}
+.pin-col{flex:1;display:flex;flex-direction:column;gap:2px}
+.chip-body{width:140px;flex-shrink:0;background:#2c2c2a;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;margin:0 6px}
+.chip-name{color:#fff;font-size:14px;font-weight:500;letter-spacing:0.5px}
+.chip-sub{color:#888;font-size:10px;margin-top:2px;text-align:center}
+.chip-notch{width:20px;height:4px;background:#444;border-radius:0 0 4px 4px;margin-bottom:6px}
+.pin-row{display:flex;align-items:center;gap:4px;padding:2px 4px;border-radius:5px;height:26px}
+.pin-row.left{justify-content:flex-end}
+.pin-row.right{justify-content:flex-start}
+.pin-num{font-size:10px;color:#bbb;min-width:16px;text-align:center;font-variant-numeric:tabular-nums}
+.pin-label{font-size:11px;font-weight:500;min-width:30px;text-align:center}
+.pin-label.sig{color:#1a1a18}
+.pin-label.pwr{color:#aaa}
+.pin-label.osc{color:#BA7517}
+.pin-label.rst{color:#A32D2D}
+.pin-dot{width:10px;height:10px;border-radius:50%;background:#ddd;transition:background 0.08s;flex-shrink:0}
+.pin-dot.high{background:#1D9E75}
+.pin-wire-l{width:14px;height:2px;background:#ccc;flex-shrink:0}
+.pin-wire-r{width:14px;height:2px;background:#ccc;flex-shrink:0}
+/* ===== INFO BAR ===== */
+.info-bar{display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+.info-card{background:#fff;border:1px solid #ddd;border-radius:7px;padding:5px 10px;font-size:12px;color:#666}
+.info-card b{color:#1a1a18;font-weight:500}
+/* ===== CANVAS ===== */
+#tc{width:100%;display:block;background:#fff;border:1px solid #ddd;border-radius:8px;margin-bottom:10px}
+/* ===== CONTROLS ===== */
+.ctrl-bar{background:#fff;border:1px solid #ddd;border-radius:10px;padding:10px 12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.ctrl-group{display:flex;align-items:center;gap:8px;font-size:12px;color:#666}
+.ctrl-group input[type=range]{width:90px;accent-color:#378ADD}
+.ctrl-group .val{font-weight:500;color:#1a1a18;min-width:70px;font-size:11px}
+.btn{font-size:12px;padding:5px 12px;border-radius:7px;border:1px solid #ccc;background:#f5f5f2;color:#333;cursor:pointer}
+.btn:hover{background:#eaeae6}
+.btn.active{background:#dce8f8;border-color:#378ADD;color:#185FA5}
+.note{font-size:11px;color:#aaa;margin-top:8px;line-height:1.5}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:#666}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+</style>
+</head>
+<body>
+<h1>CD4060 – Live Pinsignal-Simulation</h1>
+<p class="sub">Welches Signal steht wann an welchem Pin an — Logikanalysator-Ansicht</p>
+
+<div class="chip-outer">
+  <div class="chip-layout">
+    <div class="pin-col left-col" id="left-col"></div>
+    <div class="chip-body">
+      <div class="chip-notch"></div>
+      <div class="chip-name">CD4060B</div>
+      <div class="chip-sub">14-Bit Ripple Counter<br>+ Oscillator</div>
+    </div>
+    <div class="pin-col right-col" id="right-col"></div>
+  </div>
+</div>
+
+<div class="info-bar">
+  <div class="info-card">Takt-Zähler: <b id="ctr-val">0</b></div>
+  <div class="info-card">Zeitfenster: <b id="win-info">256 Takte</b></div>
+  <div class="info-card">Sichtbare Signale: <b id="vis-info">Q4–Q7</b></div>
+</div>
+
+<div class="legend" id="legend"></div>
+<canvas id="tc"></canvas>
+
+<div class="ctrl-bar">
+  <div class="ctrl-group">
+    <span>Geschwindigkeit</span>
+    <input type="range" id="sp-sl" min="-6" max="9" step="1" value="-2">
+    <span class="val" id="sp-lbl">1 Takt / 4 Frames</span>
+  </div>
+  <div class="ctrl-group">
+    <span>Zeitfenster</span>
+    <input type="range" id="wn-sl" min="4" max="15" step="1" value="7">
+    <span class="val" id="wn-lbl">128 Takte</span>
+  </div>
+  <button class="btn" id="pb" onclick="togglePause()">⏸ Pause</button>
+  <button class="btn" onclick="resetSim()">↺ Reset</button>
+</div>
+
+<p class="note">* Pinbelegung nach CD4060B. Q1–Q3 intern (nicht herausgeführt). Q11 nicht verfügbar. /MR = Master Reset (aktiv HIGH = alles löschen). Datenblatt zur Verifizierung nutzen.</p>
+
+<script>
+const LEFT_PINS = [
+  { pin:1,  name:'Q12', type:'sig', shift:11 },
+  { pin:2,  name:'Q13', type:'sig', shift:12 },
+  { pin:3,  name:'Q14', type:'sig', shift:13 },
+  { pin:4,  name:'Q5',  type:'sig', shift:4  },
+  { pin:5,  name:'Q6',  type:'sig', shift:5  },
+  { pin:6,  name:'Q7',  type:'sig', shift:6  },
+  { pin:7,  name:'Q4',  type:'sig', shift:3  },
+  { pin:8,  name:'GND', type:'pwr', shift:-1 },
+];
+const RIGHT_PINS = [
+  { pin:16, name:'VDD', type:'pwr', shift:-1 },
+  { pin:15, name:'Q10', type:'sig', shift:9  },
+  { pin:14, name:'Q9',  type:'sig', shift:8  },
+  { pin:13, name:'Q8',  type:'sig', shift:7  },
+  { pin:12, name:'/MR', type:'rst', shift:-1 },
+  { pin:11, name:'RS',  type:'osc', shift:-1 },
+  { pin:10, name:'RT',  type:'osc', shift:-1 },
+  { pin:9,  name:'CT',  type:'osc', shift:-1 },
+];
+
+const SIGNALS = [
+  { name:'CLK', pin:10, shift:0,  div:2,     col:'#888780', label:'Oszillator (intern)' },
+  { name:'Q4',  pin:7,  shift:3,  div:16,    col:'#378ADD', label:'÷ 16' },
+  { name:'Q5',  pin:4,  shift:4,  div:32,    col:'#5DCAA5', label:'÷ 32' },
+  { name:'Q6',  pin:5,  shift:5,  div:64,    col:'#1D9E75', label:'÷ 64' },
+  { name:'Q7',  pin:6,  shift:6,  div:128,   col:'#7F77DD', label:'÷ 128' },
+  { name:'Q8',  pin:13, shift:7,  div:256,   col:'#D85A30', label:'÷ 256' },
+  { name:'Q9',  pin:14, shift:8,  div:512,   col:'#BA7517', label:'÷ 512' },
+  { name:'Q10', pin:15, shift:9,  div:1024,  col:'#185FA5', label:'÷ 1024' },
+  { name:'Q12', pin:1,  shift:11, div:4096,  col:'#993556', label:'÷ 4096' },
+  { name:'Q13', pin:2,  shift:12, div:8192,  col:'#A32D2D', label:'÷ 8192' },
+  { name:'Q14', pin:3,  shift:13, div:16384, col:'#534AB7', label:'÷ 16384' },
+];
+
+function buildChip() {
+  const lc = document.getElementById('left-col');
+  const rc = document.getElementById('right-col');
+  LEFT_PINS.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'pin-row left';
+    const hasDot = p.type === 'sig';
+    row.innerHTML =
+      (hasDot ? `<span class="pin-dot" id="dot${p.pin}"></span>` : `<span style="width:10px"></span>`) +
+      `<span class="pin-wire-l"></span>` +
+      `<span class="pin-label ${p.type}">${p.name}</span>` +
+      `<span class="pin-num">${p.pin}</span>`;
+    lc.appendChild(row);
+  });
+  RIGHT_PINS.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'pin-row right';
+    const hasDot = p.type === 'sig';
+    row.innerHTML =
+      `<span class="pin-num">${p.pin}</span>` +
+      `<span class="pin-label ${p.type}">${p.name}</span>` +
+      `<span class="pin-wire-r"></span>` +
+      (hasDot ? `<span class="pin-dot" id="dot${p.pin}"></span>` : `<span style="width:10px"></span>`);
+    rc.appendChild(row);
+  });
+}
+buildChip();
+
+function buildLegend() {
+  const lg = document.getElementById('legend');
+  SIGNALS.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-dot" style="background:${s.col}"></span><span>${s.name} (${s.label})</span>`;
+    lg.appendChild(item);
+  });
+}
+buildLegend();
+
+let counter = 0;
+let running = true;
+let speedExp = -2;
+let windowExp = 7;
+
+function speedLabel(exp) {
+  if (exp >= 0) return (1 << exp) + ' T/Frame';
+  return '1 Takt / ' + (1 << (-exp)) + ' Frames';
+}
+
+function getVal(shift, tick) {
+  return (Math.floor(Math.max(0,tick)) >> shift) & 1;
+}
+
+function updateChip() {
+  const allPins = [...LEFT_PINS, ...RIGHT_PINS];
+  allPins.forEach(p => {
+    if (p.type !== 'sig') return;
+    const dot = document.getElementById('dot' + p.pin);
+    if (!dot) return;
+    const v = (counter >> p.shift) & 1;
+    dot.classList.toggle('high', v === 1);
+  });
+}
+
+const canvas = document.getElementById('tc');
+let ctx, CW, CH;
+const LW = 96;
+const ROW_H = 34;
+const PAD_T = 6;
+
+function initCanvas() {
+  CW = canvas.offsetWidth || 680;
+  CH = SIGNALS.length * ROW_H + PAD_T + 6;
+  canvas.width  = CW * devicePixelRatio;
+  canvas.height = CH * devicePixelRatio;
+  canvas.style.height = CH + 'px';
+  ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+
+function drawTiming() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, CW, CH);
+  const waveW = CW - LW;
+  const winSize = 1 << windowExp;
+  const startTick = Math.max(0, counter - winSize);
+
+  // Background grid lines (vertical)
+  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let gi = 1; gi < 4; gi++) {
+    const x = LW + (gi/4) * waveW;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke();
+  }
+  // "NOW" marker
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(LW + waveW, 0); ctx.lineTo(LW + waveW, CH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  SIGNALS.forEach((sig, i) => {
+    const y0 = PAD_T + i * ROW_H;
+    const yH = y0 + 5;
+    const yL = y0 + ROW_H - 9;
+    const yM = (yH + yL) / 2;
+
+    // Row separator
+    ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+    ctx.lineWidth = 0.5;
+    if (i > 0) { ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(CW,y0); ctx.stroke(); }
+
+    // Label background
+    ctx.fillStyle = 'rgba(0,0,0,0.015)';
+    ctx.fillRect(0, y0, LW, ROW_H);
+
+    // Signal name
+    ctx.fillStyle = sig.col;
+    ctx.font = '600 12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(sig.name, 4, yM + 1);
+
+    // Pin + div
+    ctx.fillStyle = '#aaa';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('P.' + sig.pin + '  ' + sig.label, 4, yM + 12);
+
+    // Current value pill
+    const curVal = getVal(sig.shift, counter);
+    ctx.fillStyle = curVal ? '#1D9E75' : '#ccc';
+    ctx.beginPath();
+    ctx.roundRect(LW - 31, y0 + 9, 28, 16, 4);
+    ctx.fill();
+    ctx.fillStyle = curVal ? '#fff' : '#888';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(curVal ? 'HIGH' : 'LOW', LW - 17, y0 + 20);
+    ctx.textAlign = 'left';
+
+    // Clip to waveform area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(LW, y0, waveW, ROW_H);
+    ctx.clip();
+
+    const hp = 1 << sig.shift; // half-period in ticks
+    const ticksPerPx = winSize / waveW;
+
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = sig.col;
+
+    if (hp < ticksPerPx * 0.7) {
+      // Too fast: draw dashed center line with label
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(LW, yM); ctx.lineTo(LW + waveW, yM); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = sig.col;
+      ctx.globalAlpha = 0.6;
+      ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('↔ Signal ändert sich zu schnell für diesen Zoom', LW + waveW/2, yM - 2);
+      ctx.globalAlpha = 1;
+    } else {
+      // Draw precise waveform using transition points
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      let val = getVal(sig.shift, startTick);
+      let cy = val ? yH : yL;
+      ctx.moveTo(LW, cy);
+
+      const firstT = (Math.floor(startTick / hp) + 1) * hp;
+      for (let t = firstT; t < startTick + winSize; t += hp) {
+        const px = (t - startTick) / winSize * waveW;
+        const prevY = cy;
+        val = 1 - val;
+        cy = val ? yH : yL;
+        ctx.lineTo(LW + px, prevY);
+        ctx.lineTo(LW + px, cy);
+        if (t + hp > startTick + winSize) break;
+      }
+      ctx.lineTo(LW + waveW, cy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // "jetzt →" label at right edge
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('← jetzt', LW + waveW - 3, CH - 2);
+}
+
+function updateInfoBar() {
+  document.getElementById('ctr-val').textContent = counter.toLocaleString('de');
+  const w = 1 << windowExp;
+  document.getElementById('win-info').textContent = w.toLocaleString('de') + ' Takte';
+
+  // Which signals are "visible" (at least 1 full cycle in window)?
+  const vis = SIGNALS.filter(s => {
+    const hp = 1 << s.shift;
+    return hp * 2 <= w;
+  });
+  const names = vis.map(s => s.name).join(', ');
+  document.getElementById('vis-info').textContent = names || '–';
+}
+
+function updateControls() {
+  document.getElementById('sp-lbl').textContent = speedLabel(speedExp);
+  const w = 1 << windowExp;
+  document.getElementById('wn-lbl').textContent = w.toLocaleString('de') + ' Takte';
+}
+
+document.getElementById('sp-sl').oninput = function() {
+  speedExp = +this.value;
+  updateControls();
+};
+document.getElementById('wn-sl').oninput = function() {
+  windowExp = +this.value;
+  updateInfoBar();
+  updateControls();
+};
+
+function togglePause() {
+  running = !running;
+  const btn = document.getElementById('pb');
+  btn.textContent = running ? '⏸ Pause' : '▶ Weiter';
+  btn.classList.toggle('active', !running);
+}
+
+function resetSim() {
+  counter = 0;
+  updateChip();
+  updateInfoBar();
+  drawTiming();
+}
+
+let lastTs = null;
+let frac = 0;
+function frame(ts) {
+  if (lastTs === null) lastTs = ts;
+  const dt = Math.min(ts - lastTs, 50);
+  lastTs = ts;
+  if (running) {
+    const speedMul = speedExp >= 0 ? (1 << speedExp) : 1 / (1 << (-speedExp));
+    frac += speedMul * dt / 16.67;
+    const steps = Math.floor(frac);
+    frac -= steps;
+    counter = (counter + steps) & 0x3FFFF;
+    updateChip();
+    updateInfoBar();
+    drawTiming();
+  }
+  requestAnimationFrame(frame);
+}
+
+window.addEventListener('resize', () => { initCanvas(); drawTiming(); });
+initCanvas();
+updateControls();
+updateInfoBar();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
