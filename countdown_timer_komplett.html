@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Countdown-Timer: NE555 + CD4060 + ULN2803 + Code</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#141412;color:#c8c6be;padding:14px;font-size:13px}
+h1{font-size:18px;font-weight:500;color:#fff;margin-bottom:2px}
+.sub{font-size:11px;color:#555;margin-bottom:12px}
+.sec{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#555;margin-bottom:7px}
+
+/* status bar */
+.status-bar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.stag{font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid #333;color:#666;background:#1a1a18}
+.stag.running{border-color:#1D9E75;color:#1D9E75;background:#0a1a12}
+.stag.turbo{border-color:#EF9F27;color:#EF9F27;background:#1a1000;animation:pulse-amber .6s ease-in-out infinite alternate}
+.stag.stopped{border-color:#378ADD;color:#85B7EB;background:#0a1530}
+.stag.alarm{border-color:#E24B4A;color:#F09595;background:#1a0808;animation:pulse-red .4s ease-in-out infinite alternate}
+.stag.solved{border-color:#1D9E75;color:#9FE1CB;background:#0a1a12;animation:pulse-green .8s ease-in-out infinite alternate}
+@keyframes pulse-amber{from{box-shadow:none}to{box-shadow:0 0 8px 1px rgba(239,159,39,.4)}}
+@keyframes pulse-red{from{box-shadow:none}to{box-shadow:0 0 10px 2px rgba(226,75,74,.4)}}
+@keyframes pulse-green{from{box-shadow:none}to{box-shadow:0 0 10px 2px rgba(29,158,117,.4)}}
+
+/* schematic */
+.schem-wrap{background:#0f0f0e;border:1px solid #2a2a28;border-radius:10px;padding:10px;margin-bottom:10px}
+
+/* panels */
+.row3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:10px}
+.panel{background:#1e1e1c;border:1px solid #2a2a28;border-radius:10px;padding:11px 13px}
+
+/* LED display */
+.led-bar{display:flex;gap:10px;justify-content:center;align-items:flex-end;padding:12px 0;flex-wrap:wrap}
+.led-unit{display:flex;flex-direction:column;align-items:center;gap:4px}
+.led-c{width:36px;height:36px;border-radius:50%;background:#181816;border:1.5px solid #2a2a28;transition:background .05s,box-shadow .05s,transform .1s}
+.led-c.on{background:#FFB800;border-color:#FFB800;box-shadow:0 0 14px 5px rgba(255,184,0,.5),0 0 6px 1px rgba(255,184,0,.8)}
+.led-c.alarm-flash{animation:led-alarm .3s ease-in-out infinite alternate}
+@keyframes led-alarm{from{background:#E24B4A;box-shadow:0 0 14px 5px rgba(226,75,74,.5)}to{background:#181816;box-shadow:none;border-color:#2a2a28}}
+.led-lbl{font-size:10px;color:#888}
+.led-div{font-size:9px;color:#444}
+
+/* switches */
+.sw-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:8px 0}
+.sw-unit{display:flex;flex-direction:column;align-items:center;gap:5px}
+.sw-name{font-size:11px;font-weight:500}
+.sw-body{width:56px;height:30px;background:#1c1c1a;border-radius:15px;border:1px solid #444;position:relative;cursor:pointer;transition:background .15s,border-color .15s}
+.sw-body.on{background:#162420;border-color:#1D9E75}
+.sw-body.turbo-sw{cursor:pointer}
+.sw-body.turbo-sw.on{background:#1e1800;border-color:#EF9F27}
+.sw-knob{width:24px;height:24px;background:#444;border-radius:50%;position:absolute;top:2px;left:3px;transition:left .15s,background .15s}
+.sw-body.on .sw-knob{left:29px;background:#1D9E75}
+.sw-body.turbo-sw.on .sw-knob{background:#EF9F27}
+.sw-state{font-size:10px;color:#555}
+.sw-state.on{color:#1D9E75}
+.sw-state.turbo.on{color:#EF9F27}
+
+/* code indicator */
+.code-display{display:flex;gap:4px;justify-content:center;margin:6px 0}
+.code-bit{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;border:1px solid #333;background:#111;color:#444;transition:background .1s,color .1s}
+.code-bit.match{border-color:#1D9E75;color:#1D9E75;background:#0a1a12}
+.code-bit.wrong{border-color:#E24B4A;color:#E24B4A;background:#1a0808}
+
+/* info cards */
+.ic{background:#111;border-radius:6px;padding:6px 8px;margin-bottom:5px}
+.ic-l{font-size:10px;color:#555}
+.ic-v{font-size:16px;font-weight:500;color:#c8c6be}
+.amber{color:#EF9F27}.teal{color:#1D9E75}.blue{color:#378ADD}.red{color:#E24B4A}
+
+/* Q grid */
+.q-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+.qc{background:#111;border-radius:4px;padding:3px;text-align:center}
+.qn{font-size:9px;color:#555}.qv{font-size:13px;font-weight:500}.qv.hi{color:#1D9E75}.qv.lo{color:#252523}.qd{font-size:8px;color:#333}
+
+/* progress bar */
+.prog-wrap{background:#111;border-radius:6px;height:10px;margin:6px 0;overflow:hidden}
+.prog-bar{height:100%;background:#1D9E75;border-radius:6px;transition:width .1s,background .1s}
+.prog-bar.danger{background:#E24B4A}
+
+/* canvas */
+.timing-wrap{background:#0f0f0e;border:1px solid #2a2a28;border-radius:10px;padding:8px;margin-bottom:10px}
+canvas{width:100%;display:block;background:#0b0b0a;border-radius:6px}
+
+/* controls */
+.ctrl-wrap{background:#1e1e1c;border:1px solid #2a2a28;border-radius:10px;padding:12px}
+.ctrl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.cg{display:flex;flex-direction:column;gap:4px}
+.cg label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#555}
+.cr{display:flex;align-items:center;gap:8px}
+.cr input[type=range]{flex:1;accent-color:#378ADD}
+.cv{font-size:12px;font-weight:500;color:#c8c6be;min-width:65px}
+.btn{font-size:12px;padding:5px 13px;border-radius:6px;border:1px solid #333;background:#252523;color:#c8c6be;cursor:pointer}
+.btn:hover{background:#2e2e2a}
+.btn.on{background:#1a3050;border-color:#378ADD;color:#85B7EB}
+.game-btn{font-size:13px;font-weight:500;padding:7px 18px;border-radius:8px;border:1px solid #555;background:#252523;color:#c8c6be;cursor:pointer}
+.game-btn:hover{background:#2e2e2a}
+.game-btn.sel{border-color:#EF9F27;color:#EF9F27;background:#1e1400}
+.divider{border:none;border-top:1px solid #222;margin:8px 0}
+.note{font-size:10px;color:#333;line-height:1.6;margin-top:10px}
+.hint-box{font-size:11px;color:#666;padding:7px 10px;background:#1a1a18;border-radius:6px;border-left:3px solid #333;margin-bottom:10px;line-height:1.6}
+.big-msg{font-size:20px;font-weight:500;text-align:center;padding:12px;border-radius:10px;margin:8px 0;border:1.5px solid}
+.big-msg.win{color:#9FE1CB;background:#0a1a14;border-color:#1D9E75}
+.big-msg.lose{color:#F09595;background:#1a0808;border-color:#E24B4A}
+</style>
+</head>
+<body>
+
+<h1>Countdown-Timer — Komplettschaltung</h1>
+<p class="sub">NE555 · CD4060 · BC547 Transistoren · ULN2803 · 8 LEDs · 5-Schalter-Code</p>
+
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+  <button class="game-btn sel" id="m-norm" onclick="setGameMode(false)">Lernmodus (Code sichtbar)</button>
+  <button class="game-btn"     id="m-game" onclick="setGameMode(true)">Spielmodus (Code versteckt)</button>
+  <span style="font-size:11px;color:#444;margin-left:4px">— Im Spielmodus: Code herausfinden bevor der Timer abläuft!</span>
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar" id="status-bar">
+  <span class="stag running" id="stag-run">Timer läuft</span>
+  <span class="stag" id="stag-turbo" style="display:none">TURBO aktiv</span>
+  <span id="ctr-display" style="font-size:11px;color:#444">Takt: 0 / 512</span>
+</div>
+
+<!-- BIG MESSAGE -->
+<div id="big-msg" style="display:none"></div>
+
+<!-- SCHEMATIC -->
+<div class="schem-wrap">
+  <div class="sec">Schaltplan</div>
+  <svg id="schem" viewBox="0 0 900 260" width="100%" style="display:block">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+    <!-- Rails -->
+    <line x1="8" y1="8" x2="890" y2="8" stroke="#5a1a1a" stroke-width="1.5"/>
+    <text x="12" y="6" fill="#5a1a1a" font-size="8">VCC (+9V)</text>
+    <line x1="8" y1="252" x2="890" y2="252" stroke="#2a2a2a" stroke-width="1.5"/>
+    <text x="12" y="260" fill="#2a2a2a" font-size="8">GND</text>
+
+    <!-- ===== NE555 ===== -->
+    <rect x="18" y="22" width="100" height="130" rx="5" fill="#1a1a18" stroke="#3a3a36" stroke-width="1"/>
+    <text x="68" y="40" text-anchor="middle" fill="#EF9F27" font-size="11" font-weight="500">NE555</text>
+    <line x1="30" y1="44" x2="106" y2="44" stroke="#2a2a28" stroke-width=".5"/>
+    <!-- Pins left -->
+    <line x1="0"  y1="60" x2="18" y2="60" stroke="#2a2a28" stroke-width="1"/>
+    <text x="20" y="63" fill="#555" font-size="8">1 GND</text>
+    <line x1="0"  y1="76" x2="18" y2="76" stroke="#2a2a28" stroke-width="1"/>
+    <text x="20" y="79" fill="#555" font-size="8">2 TRIG</text>
+    <line x1="0"  y1="92" x2="18" y2="92" stroke="#888" stroke-width="1"/>
+    <text x="20" y="90" fill="#888" font-size="8">6 THR</text>
+    <text x="20" y="98" fill="#444" font-size="7">(intern=2)</text>
+    <line x1="0"  y1="112" x2="18" y2="112" stroke="#2a2a28" stroke-width="1"/>
+    <text x="20" y="115" fill="#444" font-size="8">4 /RST→VCC</text>
+    <!-- Pins right -->
+    <line x1="118" y1="60" x2="138" y2="60" stroke="#5a1a1a" stroke-width="1"/>
+    <text x="106" y="63" fill="#5a1a1a" font-size="8">8 VCC</text>
+    <line x1="118" y1="76" x2="150" y2="76" stroke="#2a2a28" stroke-width="1"/>
+    <text x="106" y="79" fill="#666" font-size="8">7 DIS</text>
+    <!-- OUT Pin 3 (main CLK output) -->
+    <line x1="118" y1="92" x2="226" y2="92" stroke="#666" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="106" y="90" fill="#EF9F27" font-size="8">3 OUT</text>
+    <circle id="s555" cx="130" cy="92" r="4" fill="#2a2a28"/>
+    <!-- CV Pin 5 -->
+    <line x1="118" y1="112" x2="150" y2="112" stroke="#2a2a28" stroke-width="1"/>
+    <text x="106" y="108" fill="#555" font-size="8">5 CV</text>
+    <text x="106" y="116" fill="#444" font-size="7">100nF↓</text>
+    <!-- R1,R2,C inside -->
+    <text x="68" y="130" text-anchor="middle" fill="#664400" font-size="8">R1=10kΩ</text>
+    <text x="68" y="141" text-anchor="middle" fill="#664400" font-size="8">R2=100kΩ</text>
+    <text x="68" y="152" text-anchor="middle" fill="#664400" font-size="8">C1=10µF</text>
+    <text x="68" y="162" text-anchor="middle" fill="#EF9F27" font-size="9" id="lbl-f">–– Hz</text>
+
+    <!-- CLK wire label -->
+    <text x="183" y="88" fill="#666" font-size="8" text-anchor="middle">CLK</text>
+    <text x="183" y="97" fill="#444" font-size="7" text-anchor="middle">Pin3→10</text>
+
+    <!-- S5 TURBO SWITCH (below 555) -->
+    <rect x="18" y="165" width="100" height="76" rx="5" fill="#1a1a18" stroke="#444" stroke-width="1" stroke-dasharray="4,2"/>
+    <text x="68" y="181" text-anchor="middle" fill="#EF9F27" font-size="10" font-weight="500">S5 — TURBO</text>
+    <text x="68" y="193" text-anchor="middle" fill="#666" font-size="8">BC547 schaltet</text>
+    <text x="68" y="203" text-anchor="middle" fill="#666" font-size="8">C_turbo (1µF) parallel</text>
+    <text x="68" y="213" text-anchor="middle" fill="#666" font-size="8">zu C1 → f × 8</text>
+    <text x="68" y="225" text-anchor="middle" fill="#444" font-size="7">Falle: Countdown schneller!</text>
+    <!-- dashed line from S5 to 555 -->
+    <line x1="68" y1="165" x2="68" y2="155" stroke="#EF9F27" stroke-width="1" stroke-dasharray="3,2"/>
+    <circle id="sturbo" cx="68" cy="160" r="4" fill="#2a2a28"/>
+
+    <!-- ===== CD4060 ===== -->
+    <rect x="228" y="15" width="130" height="170" rx="5" fill="#1a1a18" stroke="#3a3a36" stroke-width="1"/>
+    <text x="293" y="33" text-anchor="middle" fill="#5DCAA5" font-size="11" font-weight="500">CD4060</text>
+    <line x1="234" y1="37" x2="352" y2="37" stroke="#2a2a28" stroke-width=".5"/>
+    <!-- Left pins -->
+    <text x="230" y="52" fill="#BA7517" font-size="8">10 RT ← CLK</text>
+    <text x="230" y="64" fill="#555" font-size="8">11 RS (10kΩ→VCC)</text>
+    <text x="230" y="76" fill="#555" font-size="8"> 9 CT (100nF→GND)</text>
+    <text x="230" y="88" fill="#E24B4A" font-size="8">12 /MR ← Code!</text>
+    <circle id="smr" cx="292" cy="84" r="4" fill="#2a2a28"/>
+    <text x="230" y="100" fill="#2a2a28" font-size="8"> 8 GND</text>
+    <text x="230" y="112" fill="#5a1a1a" font-size="8">16 VCC</text>
+    <!-- Right Q outputs -->
+    <text x="348" y="50"  fill="#378ADD" font-size="8">Q4 →</text>
+    <text x="348" y="63"  fill="#5DCAA5" font-size="8">Q5 →</text>
+    <text x="348" y="76"  fill="#1D9E75" font-size="8">Q6 →</text>
+    <text x="348" y="89"  fill="#7F77DD" font-size="8">Q7 →</text>
+    <text x="348" y="102" fill="#D85A30" font-size="8">Q8 →</text>
+    <text x="348" y="115" fill="#BA7517" font-size="8">Q9 →</text>
+    <text x="348" y="128" fill="#185FA5" font-size="8">Q10→</text>
+    <text x="348" y="141" fill="#993556" font-size="8">Q12→</text>
+    <text x="293" y="162" text-anchor="middle" fill="#444" font-size="7">Q9 → NE555 Alarm-Trigger</text>
+    <text x="293" y="172" text-anchor="middle" fill="#333" font-size="7">Q1–Q3 intern · Q11 N/A</text>
+    <!-- Q animated dots -->
+    <circle id="qd4"  cx="368" cy="46"  r="3" fill="#2a2a28"/>
+    <circle id="qd5"  cx="368" cy="59"  r="3" fill="#2a2a28"/>
+    <circle id="qd6"  cx="368" cy="72"  r="3" fill="#2a2a28"/>
+    <circle id="qd7"  cx="368" cy="85"  r="3" fill="#2a2a28"/>
+    <circle id="qd8"  cx="368" cy="98"  r="3" fill="#2a2a28"/>
+    <circle id="qd9"  cx="368" cy="111" r="3" fill="#2a2a28"/>
+    <circle id="qd10" cx="368" cy="124" r="3" fill="#2a2a28"/>
+    <circle id="qd12" cx="368" cy="137" r="3" fill="#2a2a28"/>
+    <!-- Q wires to ULN -->
+    <line x1="375" y1="46"  x2="408" y2="46"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="59"  x2="408" y2="59"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="72"  x2="408" y2="72"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="85"  x2="408" y2="85"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="98"  x2="408" y2="98"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="111" x2="408" y2="111" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="124" x2="408" y2="124" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="375" y1="137" x2="408" y2="137" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+
+    <!-- ===== ULN2803 ===== -->
+    <rect x="410" y="22" width="88" height="130" rx="5" fill="#1a1a18" stroke="#3a3a36" stroke-width="1"/>
+    <text x="454" y="38" text-anchor="middle" fill="#7F77DD" font-size="10" font-weight="500">ULN2803</text>
+    <line x1="416" y1="42" x2="492" y2="42" stroke="#2a2a28" stroke-width=".5"/>
+    <text x="412" y="51"  fill="#555" font-size="7">IN1</text>
+    <text x="412" y="64"  fill="#555" font-size="7">IN2</text>
+    <text x="412" y="77"  fill="#555" font-size="7">IN3</text>
+    <text x="412" y="90"  fill="#555" font-size="7">IN4</text>
+    <text x="412" y="103" fill="#555" font-size="7">IN5</text>
+    <text x="412" y="116" fill="#555" font-size="7">IN6</text>
+    <text x="412" y="129" fill="#555" font-size="7">IN7</text>
+    <text x="412" y="142" fill="#555" font-size="7">IN8</text>
+    <text x="492" y="51"  fill="#555" font-size="7" text-anchor="end">O1</text>
+    <text x="492" y="64"  fill="#555" font-size="7" text-anchor="end">O2</text>
+    <text x="492" y="77"  fill="#555" font-size="7" text-anchor="end">O3</text>
+    <text x="492" y="90"  fill="#555" font-size="7" text-anchor="end">O4</text>
+    <text x="492" y="103" fill="#555" font-size="7" text-anchor="end">O5</text>
+    <text x="492" y="116" fill="#555" font-size="7" text-anchor="end">O6</text>
+    <text x="492" y="129" fill="#555" font-size="7" text-anchor="end">O7</text>
+    <text x="492" y="142" fill="#555" font-size="7" text-anchor="end">O8</text>
+    <text x="454" y="158" text-anchor="middle" fill="#444" font-size="7">8× Darlington OC</text>
+    <!-- ULN output wires to LEDs -->
+    <line x1="500" y1="47"  x2="528" y2="47"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="60"  x2="528" y2="60"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="73"  x2="528" y2="73"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="86"  x2="528" y2="86"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="99"  x2="528" y2="99"  stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="112" x2="528" y2="112" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="125" x2="528" y2="125" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <line x1="500" y1="138" x2="528" y2="138" stroke="#3a3a36" stroke-width="1" marker-end="url(#ah)"/>
+    <!-- 470Ω note -->
+    <text x="514" y="20" fill="#333" font-size="7" text-anchor="middle">470Ω</text>
+
+    <!-- LEDs in schematic -->
+    <circle id="sl0" cx="540" cy="47"  r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl1" cx="540" cy="60"  r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl2" cx="540" cy="73"  r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl3" cx="540" cy="86"  r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl4" cx="540" cy="99"  r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl5" cx="540" cy="112" r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl6" cx="540" cy="125" r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <circle id="sl7" cx="540" cy="138" r="8" fill="#1c1c1a" stroke="#2a2a28" stroke-width="1"/>
+    <text x="540" y="158" text-anchor="middle" fill="#444" font-size="8">8 × LED</text>
+    <!-- Q labels next to LEDs -->
+    <text x="552" y="50"  fill="#378ADD" font-size="7">Q4</text>
+    <text x="552" y="63"  fill="#5DCAA5" font-size="7">Q5</text>
+    <text x="552" y="76"  fill="#1D9E75" font-size="7">Q6</text>
+    <text x="552" y="89"  fill="#7F77DD" font-size="7">Q7</text>
+    <text x="552" y="102" fill="#D85A30" font-size="7">Q8</text>
+    <text x="552" y="115" fill="#BA7517" font-size="7">Q9</text>
+    <text x="552" y="128" fill="#185FA5" font-size="7">Q10</text>
+    <text x="552" y="141" fill="#993556" font-size="7">Q12</text>
+
+    <!-- ===== CODE SWITCH CIRCUIT (bottom) ===== -->
+    <text x="18" y="248" fill="#E24B4A" font-size="8" font-weight="500">Code-Schaltung (S1–S4 + BC547 in Reihe → /MR Pin 12):</text>
+    <!-- Switch + transistor chain symbols -->
+    <text x="18"  y="236" fill="#333" font-size="8">S1</text>
+    <rect x="18"  y="220" width="28" height="14" rx="3" fill="#1a1a18" stroke="#444" stroke-width="1"/>
+    <circle id="qs1" cx="32" cy="227" r="4" fill="#2a2a28"/>
+    <line x1="46"  y1="227" x2="60"  y2="227" stroke="#3a3a36" stroke-width="1"/>
+    <text x="60"  y="218" fill="#333" font-size="7">Q1</text>
+    <rect x="60"  y="220" width="24" height="14" rx="2" fill="#1a1a18" stroke="#555" stroke-width="1"/>
+    <text x="72"  y="229" text-anchor="middle" fill="#444" font-size="7">T</text>
+
+    <text x="92"  y="236" fill="#333" font-size="8">S2</text>
+    <rect x="92"  y="220" width="28" height="14" rx="3" fill="#1a1a18" stroke="#444" stroke-width="1"/>
+    <circle id="qs2" cx="106" cy="227" r="4" fill="#2a2a28"/>
+    <line x1="120" y1="227" x2="134" y2="227" stroke="#3a3a36" stroke-width="1"/>
+    <text x="134" y="218" fill="#333" font-size="7">Q2</text>
+    <rect x="134" y="220" width="24" height="14" rx="2" fill="#1a1a18" stroke="#555" stroke-width="1"/>
+    <text x="146" y="229" text-anchor="middle" fill="#444" font-size="7">T</text>
+
+    <text x="166" y="236" fill="#333" font-size="8">S3</text>
+    <rect x="166" y="220" width="28" height="14" rx="3" fill="#1a1a18" stroke="#444" stroke-width="1"/>
+    <circle id="qs3" cx="180" cy="227" r="4" fill="#2a2a28"/>
+    <line x1="194" y1="227" x2="208" y2="227" stroke="#3a3a36" stroke-width="1"/>
+    <text x="208" y="218" fill="#333" font-size="7">Q3</text>
+    <rect x="208" y="220" width="24" height="14" rx="2" fill="#1a1a18" stroke="#555" stroke-width="1"/>
+    <text x="220" y="229" text-anchor="middle" fill="#444" font-size="7">T</text>
+
+    <text x="240" y="236" fill="#333" font-size="8">S4</text>
+    <rect x="240" y="220" width="28" height="14" rx="3" fill="#1a1a18" stroke="#444" stroke-width="1"/>
+    <circle id="qs4" cx="254" cy="227" r="4" fill="#2a2a28"/>
+    <line x1="268" y1="227" x2="282" y2="227" stroke="#3a3a36" stroke-width="1"/>
+    <text x="282" y="218" fill="#333" font-size="7">Q4</text>
+    <rect x="282" y="220" width="24" height="14" rx="2" fill="#1a1a18" stroke="#555" stroke-width="1"/>
+    <text x="294" y="229" text-anchor="middle" fill="#444" font-size="7">T</text>
+
+    <!-- chain → MR line -->
+    <line x1="306" y1="227" x2="330" y2="227" stroke="#E24B4A" stroke-width="1.5"/>
+    <text x="316" y="222" fill="#E24B4A" font-size="7">+Inv</text>
+    <line x1="330" y1="227" x2="330" y2="84" stroke="#E24B4A" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="334" y="160" fill="#E24B4A" font-size="7">→/MR</text>
+
+    <!-- Notes right side -->
+    <text x="600" y="28"  fill="#333" font-size="8" font-weight="500">Schaltlogik Code</text>
+    <text x="600" y="42"  fill="#444" font-size="7">S1–S4 je ein BC547 NPN</text>
+    <text x="600" y="54"  fill="#444" font-size="7">Alle 4 in Reihe (Kollektor-Kette)</text>
+    <text x="600" y="66"  fill="#444" font-size="7">Korrekte Stellung → Kette leitend</text>
+    <text x="600" y="78"  fill="#444" font-size="7">→ Ausgang LOW → Inv. → MR HIGH</text>
+    <text x="600" y="90"  fill="#444" font-size="7">→ CD4060 stoppt = Erfolg!</text>
+    <text x="600" y="108" fill="#333" font-size="8" font-weight="500">S5 — Turbo-Schalter (Falle)</text>
+    <text x="600" y="122" fill="#444" font-size="7">BC547 schaltet C_turbo (1µF)</text>
+    <text x="600" y="134" fill="#444" font-size="7">parallel zu C1 → f steigt ×8</text>
+    <text x="600" y="146" fill="#EF9F27" font-size="7">Falsch betätigt → Zeitdruck!</text>
+    <text x="600" y="164" fill="#333" font-size="8" font-weight="500">Alarm</text>
+    <text x="600" y="178" fill="#444" font-size="7">Q9 HIGH → Trigger NE555</text>
+    <text x="600" y="190" fill="#444" font-size="7">→ Monostabil → Alarm-Ton</text>
+    <text x="600" y="202" fill="#444" font-size="7">Lautsprecher über 100µF-C</text>
+  </svg>
+</div>
+
+<!-- LIVE PANELS -->
+<div class="row3">
+  <!-- NE555 Panel -->
+  <div class="panel">
+    <div class="sec">NE555 — Takt &amp; Alarm</div>
+    <div class="ic"><div class="ic-l">Taktfrequenz</div><div class="ic-v amber" id="lv-f">–</div></div>
+    <div class="ic" style="display:flex;gap:8px">
+      <div style="flex:1"><div class="ic-l">Periode</div><div class="ic-v" style="font-size:13px" id="lv-p">–</div></div>
+      <div style="flex:1"><div class="ic-l">Pin 3</div><div class="ic-v teal" style="font-size:13px" id="lv-p3">–</div></div>
+    </div>
+    <div class="ic-l" style="margin-top:6px">Turbo-Faktor:</div>
+    <div style="font-size:14px;font-weight:500;color:#EF9F27;margin-top:2px" id="lv-turbo">× 1 (normal)</div>
+  </div>
+
+  <!-- CD4060 Q States -->
+  <div class="panel">
+    <div class="sec">CD4060 — Q-Ausgänge</div>
+    <div class="q-grid" id="q-grid"></div>
+    <div style="margin-top:6px">
+      <div class="ic-l">Zählerstand</div>
+      <div class="prog-wrap"><div class="prog-bar" id="prog" style="width:0%"></div></div>
+      <div style="font-size:10px;color:#555;margin-top:2px" id="prog-lbl">0 / 512 Takte</div>
+    </div>
+  </div>
+
+  <!-- ULN + LEDs -->
+  <div class="panel">
+    <div class="sec">ULN2803 → 8 LEDs</div>
+    <div class="led-bar" id="led-bar"></div>
+  </div>
+</div>
+
+<!-- SWITCH PANEL -->
+<div class="panel" style="margin-bottom:10px">
+  <div class="sec">5-Schalter Code-Eingabe</div>
+  <div id="code-hint" class="hint-box">
+    Richtiger Code: <span id="code-show"></span><br>
+    Hinweis: S5 ist die Turbo-Falle — nicht S5 drücken wenn du nicht weißt was passiert!
+  </div>
+  <div class="sw-row" id="sw-row"></div>
+  <div style="margin-top:8px;text-align:center">
+    <div class="ic-l" style="margin-bottom:4px">Code-Status (S1–S4)</div>
+    <div class="code-display" id="code-display"></div>
+    <div style="font-size:12px;margin-top:6px;font-weight:500" id="code-status-lbl">–</div>
+  </div>
+</div>
+
+<!-- TIMING DIAGRAM -->
+<div class="timing-wrap">
+  <div class="sec">Logikanalysator</div>
+  <canvas id="tc"></canvas>
+</div>
+
+<!-- CONTROLS -->
+<div class="ctrl-wrap">
+  <div class="sec">Simulation</div>
+  <div class="ctrl-grid">
+    <div class="cg">
+      <label>Geschwindigkeit</label>
+      <div class="cr"><input type="range" min="-6" max="6" step="1" value="-2" id="sp"><span class="cv" id="spv">1 T / 4 Frames</span></div>
+    </div>
+    <div class="cg">
+      <label>Zeitfenster</label>
+      <div class="cr"><input type="range" min="4" max="14" step="1" value="7" id="wn"><span class="cv" id="wnv">128 Takte</span></div>
+    </div>
+    <div class="cg">
+      <label>Steuerung</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn" id="pb" onclick="togglePause()">⏸ Pause</button>
+        <button class="btn" onclick="resetSim()">↺ Neustart</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  Transistor-Logik: Jeder BC547 ist als Emitterfolger-Schalter in der Kollektor-Kette verschaltet. Alle 4 Transistoren müssen gleichzeitig leitend sein (korrekte Schalterstellung) damit Strom fließt und /MR (via Inverter-Transistor) auf HIGH gezogen wird. Ein einzelner ausgeschalteter Transistor unterbricht die Kette → /MR = LOW → Zähler läuft weiter.<br>
+  Im echten Aufbau: 10kΩ Pull-up an der Kettenkette, Inverter-Transistor (z.B. BC557 PNP oder zweiter BC547 mit negierter Logik).
+</p>
+
+<script>
+const CORRECT = [true, false, true, true]; // S1=AN S2=AUS S3=AN S4=AN
+const ALARM_AT = 512;
+const Q_SIGS = [
+  { name:'Q4',  shift:3,  div:16,    col:'#378ADD' },
+  { name:'Q5',  shift:4,  div:32,    col:'#5DCAA5' },
+  { name:'Q6',  shift:5,  div:64,    col:'#1D9E75' },
+  { name:'Q7',  shift:6,  div:128,   col:'#7F77DD' },
+  { name:'Q8',  shift:7,  div:256,   col:'#D85A30' },
+  { name:'Q9',  shift:8,  div:512,   col:'#BA7517' },
+  { name:'Q10', shift:9,  div:1024,  col:'#185FA5' },
+  { name:'Q12', shift:11, div:4096,  col:'#993556' },
+];
+const TIM_SIGS = [
+  { name:'CLK', shift:0,  div:1,    pin:'P3→10', col:'#888780' },
+  ...Q_SIGS.map(s=>({name:s.name,shift:s.shift,div:s.div,pin:'–',col:s.col}))
+];
+
+let counter=0, running=true, speedExp=-2, windowExp=7;
+let switches=[false,false,false,false,false]; // S1-S5
+let alarmFired=false, codeSolved=false, gameMode=false;
+let audioCtx=null;
+
+function getVal(sh){ return (counter>>sh)&1; }
+function fmtFreq(f){ return f>=1000?(f/1000).toFixed(2)+' kHz':f.toFixed(2)+' Hz'; }
+function fmtTime(t){ return t<0.001?(t*1e6).toFixed(0)+'µs':t<1?(t*1000).toFixed(1)+'ms':t.toFixed(2)+'s'; }
+function calc555(){
+  const r1=10e3,r2=100e3,c=10e-6;
+  const mult=switches[4]?8:1;
+  const f=1.44/((r1+2*r2)*c)*mult;
+  return {f,period:1/f,duty:(r1+r2)/(r1+2*r2)*100};
+}
+function codeCorrect(){ return CORRECT.every((c,i)=>c===switches[i]); }
+
+// BUILD Q GRID
+(function(){
+  const g=document.getElementById('q-grid');
+  Q_SIGS.forEach(q=>{
+    const c=document.createElement('div');c.className='qc';c.id='qc-'+q.name;
+    c.innerHTML=`<div class="qn">${q.name}</div><div class="qv lo" id="qv-${q.name}">0</div><div class="qd">÷${q.div}</div>`;
+    g.appendChild(c);
+  });
+})();
+
+// BUILD LED BAR
+(function(){
+  const bar=document.getElementById('led-bar');
+  Q_SIGS.forEach((s,i)=>{
+    const u=document.createElement('div');u.className='led-unit';
+    u.innerHTML=`<div class="led-c" id="led${i}"></div><div class="led-lbl" style="color:${s.col}">${s.name}</div><div class="led-div">÷${s.div}</div>`;
+    bar.appendChild(u);
+  });
+})();
+
+// BUILD SWITCHES
+(function(){
+  const row=document.getElementById('sw-row');
+  const names=['S1','S2','S3','S4','S5 (Turbo!)'];
+  const colors=['#1D9E75','#1D9E75','#1D9E75','#1D9E75','#EF9F27'];
+  for(let i=0;i<5;i++){
+    const u=document.createElement('div');u.className='sw-unit';
+    const isTurbo=i===4;
+    u.innerHTML=`
+      <div class="sw-name" style="color:${colors[i]}">${names[i]}</div>
+      <div class="sw-body${isTurbo?' turbo-sw':''}" id="sw${i}" onclick="toggleSwitch(${i})">
+        <div class="sw-knob"></div>
+      </div>
+      <div class="sw-state${isTurbo?' turbo':''}" id="swl${i}">AUS</div>`;
+    row.appendChild(u);
+  }
+  // Code display
+  const cd=document.getElementById('code-display');
+  for(let i=0;i<4;i++){
+    const b=document.createElement('div');b.className='code-bit';b.id='cb'+i;b.textContent='?';
+    cd.appendChild(b);
+  }
+  // Code hint
+  const cs=document.getElementById('code-show');
+  cs.innerHTML=CORRECT.map((c,i)=>`<b style="color:${c?'#1D9E75':'#E24B4A'}">S${i+1}=${c?'AN':'AUS'}</b>`).join(' · ');
+})();
+
+function toggleSwitch(i){
+  if(codeSolved||alarmFired) return;
+  switches[i]=!switches[i];
+  const el=document.getElementById('sw'+i);
+  const lbl=document.getElementById('swl'+i);
+  el.classList.toggle('on',switches[i]);
+  lbl.textContent=switches[i]?'AN':'AUS';
+  lbl.classList.toggle('on',switches[i]);
+  updateSwitchSchematic();
+}
+
+function setGameMode(gm){
+  gameMode=gm;
+  document.getElementById('m-norm').classList.toggle('sel',!gm);
+  document.getElementById('m-game').classList.toggle('sel',gm);
+  document.getElementById('code-hint').style.display=gm?'none':'block';
+}
+
+function updateSwitchSchematic(){
+  const ids=['qs1','qs2','qs3','qs4'];
+  switches.slice(0,4).forEach((s,i)=>{
+    const el=document.getElementById(ids[i]);
+    if(el) el.setAttribute('fill',s?'#1D9E75':'#2a2a28');
+  });
+  const turboEl=document.getElementById('sturbo');
+  if(turboEl) turboEl.setAttribute('fill',switches[4]?'#EF9F27':'#2a2a28');
+}
+
+function updateCodeDisplay(){
+  let allMatch=true;
+  for(let i=0;i<4;i++){
+    const el=document.getElementById('cb'+i);
+    if(!el)continue;
+    const match=switches[i]===CORRECT[i];
+    if(!match)allMatch=false;
+    el.textContent=switches[i]?'1':'0';
+    el.className='code-bit '+(match?'match':'wrong');
+  }
+  const lbl=document.getElementById('code-status-lbl');
+  if(codeSolved){ lbl.textContent='✓ Code korrekt — Timer gestoppt!'; lbl.style.color='#1D9E75'; }
+  else if(allMatch){ lbl.textContent='✓ Alle Bits korrekt!'; lbl.style.color='#1D9E75'; }
+  else { const n=CORRECT.filter((c,i)=>c===switches[i]).length; lbl.textContent=n+'/4 Bits korrekt'; lbl.style.color=n>=3?'#EF9F27':'#666'; }
+}
+
+function playAlarm(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  const now=audioCtx.currentTime;
+  for(let rep=0;rep<4;rep++){
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='square'; o.frequency.value=440+rep*80;
+    g.gain.setValueAtTime(0.4,now+rep*0.25);
+    g.gain.exponentialRampToValueAtTime(0.001,now+rep*0.25+0.22);
+    o.connect(g);g.connect(audioCtx.destination);
+    o.start(now+rep*0.25);o.stop(now+rep*0.25+0.25);
+  }
+}
+
+function playSuccess(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  const now=audioCtx.currentTime;
+  [523,659,784,1047].forEach((f,i)=>{
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='square'; o.frequency.value=f;
+    g.gain.setValueAtTime(0.3,now+i*0.12);
+    g.gain.exponentialRampToValueAtTime(0.001,now+i*0.12+0.18);
+    o.connect(g);g.connect(audioCtx.destination);
+    o.start(now+i*0.12);o.stop(now+i*0.12+0.2);
+  });
+}
+
+function updateStatus(){
+  const bar=document.getElementById('status-bar');
+  const runTag=document.getElementById('stag-run');
+  const turboTag=document.getElementById('stag-turbo');
+  if(codeSolved){
+    runTag.textContent='Timer gestoppt — Erfolg!'; runTag.className='stag solved';
+    turboTag.style.display='none';
+  } else if(alarmFired){
+    runTag.textContent='ALARM — Zeit abgelaufen!'; runTag.className='stag alarm';
+    turboTag.style.display='none';
+  } else if(switches[4]){
+    runTag.textContent='Timer läuft'; runTag.className='stag running';
+    turboTag.style.display='inline';
+  } else {
+    runTag.textContent='Timer läuft'; runTag.className='stag running';
+    turboTag.style.display='none';
+  }
+  document.getElementById('ctr-display').textContent='Takt: '+counter+' / '+ALARM_AT;
+  const msg=document.getElementById('big-msg');
+  if(codeSolved){ msg.style.display='block'; msg.className='big-msg win'; msg.textContent='Entschärft! Code korrekt eingegeben.'; }
+  else if(alarmFired){ msg.style.display='block'; msg.className='big-msg lose'; msg.textContent='Alarm! Zeit abgelaufen — Neustart mit ↺'; }
+  else msg.style.display='none';
+}
+
+function updateLive(){
+  const {f,period}=calc555();
+  document.getElementById('lv-f').textContent=fmtFreq(f);
+  document.getElementById('lv-p').textContent=fmtTime(period);
+  const clk=getVal(0);
+  document.getElementById('lv-p3').textContent=clk?'HIGH':'LOW';
+  document.getElementById('lv-p3').style.color=clk?'#1D9E75':'#444';
+  document.getElementById('lv-turbo').textContent=switches[4]?'× 8 (TURBO aktiv!)':'× 1 (normal)';
+  document.getElementById('schem').querySelector('#lbl-f').textContent=fmtFreq(f);
+  document.getElementById('s555').setAttribute('fill',clk?'#EF9F27':'#2a2a28');
+  document.getElementById('smr').setAttribute('fill',codeSolved?'#E24B4A':'#2a2a28');
+  // Q states
+  Q_SIGS.forEach((q,i)=>{
+    const v=getVal(q.shift);
+    const el=document.getElementById('qv-'+q.name); if(el){el.textContent=v;el.className='qv '+(v?'hi':'lo');}
+    const dot=document.getElementById('qd'+q.name.slice(1)); if(dot) dot.setAttribute('fill',v?q.col:'#2a2a28');
+    // schematic LEDs
+    const sl=document.getElementById('sl'+i);
+    if(sl){ const on=alarmFired?Math.floor(Date.now()/200)%2===0:v; sl.setAttribute('fill',on?'#FFB800':'#1c1c1a'); sl.setAttribute('stroke',on?'#FFB800':'#2a2a28'); }
+    // LED bar (inverted: LED ON when Q LOW = countdown display)
+    const led=document.getElementById('led'+i);
+    if(led){
+      if(alarmFired){ led.className='led-c alarm-flash'; }
+      else { led.className='led-c'+(v?'':' on'); }
+    }
+  });
+  // progress bar
+  const pct=Math.min(counter/ALARM_AT*100,100);
+  const pb=document.getElementById('prog');
+  pb.style.width=pct.toFixed(1)+'%';
+  pb.className='prog-bar'+(pct>80?' danger':'');
+  document.getElementById('prog-lbl').textContent=counter+' / '+ALARM_AT+' Takte ('+pct.toFixed(0)+'%)';
+  updateCodeDisplay();
+  updateStatus();
+}
+
+// TIMING
+const canvas=document.getElementById('tc');
+let ctx,CW,CH;
+const LW=104,ROW_H=30,PAD_T=4;
+function initCanvas(){
+  CW=canvas.offsetWidth||680;
+  CH=TIM_SIGS.length*ROW_H+PAD_T+4;
+  canvas.width=CW*devicePixelRatio;canvas.height=CH*devicePixelRatio;
+  canvas.style.height=CH+'px';
+  ctx=canvas.getContext('2d');ctx.scale(devicePixelRatio,devicePixelRatio);
+}
+function drawTiming(){
+  if(!ctx)return;
+  ctx.clearRect(0,0,CW,CH);
+  const waveW=CW-LW,winSize=1<<windowExp,startTick=Math.max(0,counter-winSize);
+  ctx.strokeStyle='rgba(255,255,255,0.025)';ctx.lineWidth=0.5;
+  for(let gi=1;gi<8;gi++){const x=LW+(gi/8)*waveW;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+  ctx.setLineDash([3,4]);ctx.strokeStyle='rgba(255,255,255,0.05)';
+  ctx.beginPath();ctx.moveTo(LW+waveW,0);ctx.lineTo(LW+waveW,CH);ctx.stroke();ctx.setLineDash([]);
+  TIM_SIGS.forEach((sig,i)=>{
+    const y0=PAD_T+i*ROW_H,yH=y0+4,yL=y0+ROW_H-6,yM=(yH+yL)/2;
+    if(i>0){ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(0,y0);ctx.lineTo(CW,y0);ctx.stroke();}
+    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,y0,LW,ROW_H);
+    ctx.fillStyle=sig.col;ctx.font='600 11px sans-serif';ctx.textAlign='left';ctx.fillText(sig.name,4,yM+1);
+    ctx.fillStyle='#444';ctx.font='9px sans-serif';ctx.fillText('÷'+sig.div,58,yM+1);
+    const cv=getVal(sig.shift);
+    ctx.fillStyle=cv?'#1D9E75':'#2a2a28';
+    if(ctx.roundRect) ctx.roundRect(LW-21,y0+7,17,13,3); else ctx.rect(LW-21,y0+7,17,13);
+    ctx.fill();
+    ctx.fillStyle=cv?'#fff':'#555';ctx.font='8px sans-serif';ctx.textAlign='center';
+    ctx.fillText(cv?'HI':'LO',LW-12,y0+17);ctx.textAlign='left';
+    ctx.save();ctx.beginPath();ctx.rect(LW,y0,waveW,ROW_H);ctx.clip();
+    const hp=1<<sig.shift,tpx=winSize/waveW;
+    ctx.lineWidth=1.5;ctx.strokeStyle=sig.col;
+    if(hp<tpx*0.5){
+      ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(LW,yM);ctx.lineTo(LW+waveW,yM);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=sig.col;ctx.globalAlpha=0.4;ctx.font='9px sans-serif';ctx.textAlign='center';
+      ctx.fillText('← herauszoomen',LW+waveW/2,yM);ctx.globalAlpha=1;
+    } else {
+      ctx.setLineDash([]);
+      let val=(Math.floor(startTick)>>sig.shift)&1,cy=val?yH:yL;
+      ctx.beginPath();ctx.moveTo(LW,cy);
+      const ft=(Math.floor(startTick/hp)+1)*hp;
+      for(let t=ft;t<startTick+winSize;t+=hp){
+        const px=(t-startTick)/winSize*waveW,pcy=cy;val=1-val;cy=val?yH:yL;
+        ctx.lineTo(LW+px,pcy);ctx.lineTo(LW+px,cy);
+      }
+      ctx.lineTo(LW+waveW,cy);ctx.stroke();
+    }
+    ctx.restore();
+  });
+  ctx.fillStyle='#333';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText('jetzt →',LW+waveW-2,CH-2);
+}
+
+document.getElementById('sp').oninput=function(){
+  speedExp=+this.value;
+  const v=speedExp>=0?(1<<speedExp)+' T/Frame':'1 T / '+(1<<(-speedExp))+' Frames';
+  document.getElementById('spv').textContent=v;
+};
+document.getElementById('wn').oninput=function(){
+  windowExp=+this.value;
+  document.getElementById('wnv').textContent=(1<<windowExp).toLocaleString('de')+' Takte';
+};
+function togglePause(){running=!running;const b=document.getElementById('pb');b.textContent=running?'⏸ Pause':'▶ Weiter';b.classList.toggle('on',!running);}
+function resetSim(){
+  counter=0;alarmFired=false;codeSolved=false;running=true;
+  switches.fill(false);
+  for(let i=0;i<5;i++){document.getElementById('sw'+i).classList.remove('on');document.getElementById('swl'+i).textContent='AUS';document.getElementById('swl'+i).classList.remove('on');}
+  document.getElementById('pb').textContent='⏸ Pause';document.getElementById('pb').classList.remove('on');
+  updateSwitchSchematic();updateLive();drawTiming();
+}
+
+let lastTs=null,frac=0;
+function frame(ts){
+  if(lastTs===null)lastTs=ts;
+  const dt=Math.min(ts-lastTs,60);lastTs=ts;
+  if(running&&!codeSolved&&!alarmFired){
+    const turboMult=switches[4]?8:1;
+    const baseMul=speedExp>=0?(1<<speedExp):1/(1<<(-speedExp));
+    frac+=baseMul*turboMult*dt/16.67;
+    const steps=Math.floor(frac);frac-=steps;
+    counter=(counter+steps)&0xFFFFFF;
+    // check conditions
+    if(!alarmFired&&counter>=ALARM_AT){alarmFired=true;playAlarm();}
+    if(!codeSolved&&!alarmFired&&codeCorrect()){codeSolved=true;running=false;playSuccess();}
+  }
+  updateLive();drawTiming();
+  requestAnimationFrame(frame);
+}
+window.addEventListener('resize',()=>{initCanvas();drawTiming();});
+initCanvas();
+document.getElementById('spv').textContent='1 T / 4 Frames';
+document.getElementById('wnv').textContent='128 Takte';
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
